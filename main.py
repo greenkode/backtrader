@@ -9,7 +9,7 @@ import sys
 import backtrader as bt
 from datetime import datetime
 
-from BinanceDataFeed import BinanceCsvDataFeed
+from data_feeds import BinanceCsvDataFeed
 from BinanceSizers import BinanceSizer, CommInfoFractional
 
 from Portfolio import rebalance
@@ -19,7 +19,12 @@ from api.coinmarketcap import get_top_cryptos_by_market_volume
 
 
 class BinanceStrategy(bt.Strategy):
-    params = (('volatility_period', 20),)
+    params = (('stop_loss', 0.02),
+              ('maximum_stake', 0.2),
+              ('trail', False),
+              ('volatility_window', 20),
+              ('minimum_momentum', 40),
+              ('portfolio_size', 10),)
 
     def __init__(self):
         self.dataclose = self.datas[0].close
@@ -28,33 +33,29 @@ class BinanceStrategy(bt.Strategy):
         self.buyprice = None
         self.buycomm = None
 
-        self.window = 0
-        self.minimum_momentum = 40  # 40
-
-        self.momentum_window = 125
-        self.portfolio_size = 10
-        self.vola_window = 20  # 20
-        self.kline = sys.argv[2]
-
         self.open_orders = {}
+        self.window = 0
 
     def next(self):
 
         self.window = self.window + 1
 
-        if self.window <= self.vola_window or self.is_execution_time() or len(
-                self.open_orders) > self.portfolio_size:
+        if self.window <= self.p.volatility_window:
             return
 
         hist, ranking_table = self.calculate_ranking_table()
 
         kept_positions = self.alter_kept_positions(ranking_table)
 
-        replacement_stocks = self.portfolio_size - len(kept_positions)
+        replacement_stocks = self.p.portfolio_size - len(kept_positions)
 
         buy_list = ranking_table.loc[~ranking_table.index.isin(kept_positions)][:replacement_stocks]
 
         new_portfolio = self.get_new_portfolio(buy_list, ranking_table, kept_positions)
+
+        if len(kept_positions) > 0 and not self.is_trading_day():
+            new_portfolio = new_portfolio.iloc[0:0]
+
         for symbol in kept_positions:
             new_portfolio = new_portfolio.append({'symbol': symbol, 'ranking': ranking_table.loc[symbol]},
                                                  ignore_index=True)
@@ -64,17 +65,16 @@ class BinanceStrategy(bt.Strategy):
 
         self.buy_logic(kept_positions, new_portfolio, ranking_table, vola_target_weights)
 
-    def is_execution_time(self):
-        return self.kline == '1d' and self.datas[0].datetime.date(0).weekday() != 6 or self.kline == '1h' and \
-               self.datas[0].datetime.time(0).hour % 6 == 0
+    def is_trading_day(self):
+        return self.datas[0].datetime.date(0).weekday() == 6
 
     def volatility(self, data):
-        return data.pct_change().rolling(self.vola_window).std().iloc[-1]
+        return data.pct_change().rolling(self.p.volatility_window).std().iloc[-1]
 
     def calculate_ranking_table(self):
         df = pd.DataFrame()
         for datum in self.datas:
-            hist = datum.close.lines[0].get(size=self.vola_window + 1)
+            hist = datum.close.lines[0].get(size=self.p.volatility_window + 1)
             df[basename(datum._dataname).split('-')[1]] = hist
         ranking_table = rebalance(self, df)
         return df, ranking_table
@@ -84,13 +84,13 @@ class BinanceStrategy(bt.Strategy):
         inv_vola_table = 1 / vola_table
         sum_inv_vola = np.sum(inv_vola_table)
         vola_target_weights = inv_vola_table / sum_inv_vola
-        return vola_target_weights
+        return vola_target_weights.apply(lambda x: min(x, self.p.maximum_stake))
 
     def buy_logic(self, kept_positions, new_portfolio, ranking_table, vola_target_weights):
         for i, rank in new_portfolio.iterrows():
             symbol = rank['symbol']
             weight = vola_target_weights[symbol]
-            if symbol in kept_positions or ranking_table[symbol] > self.minimum_momentum:
+            if symbol in kept_positions or ranking_table[symbol] > self.p.minimum_momentum:
                 self.open_orders[symbol] = self.order_target_percent(
                     data=[x for x in self.datas if symbol.split('-')[0] in x._dataname][0],
                     target=weight, symbol=symbol)
@@ -107,7 +107,7 @@ class BinanceStrategy(bt.Strategy):
     def alter_kept_positions(self, ranking_table):
         kept_positions = list(self.open_orders.keys())
         for symbol, security in self.open_orders.items():
-            if symbol not in ranking_table or ranking_table[symbol] < self.minimum_momentum:
+            if symbol not in ranking_table or ranking_table[symbol] < self.p.minimum_momentum:
                 self.open_orders[symbol] = self.sell(
                     data=[x for x in self.datas if symbol.split('-')[0] in x._dataname][0],
                     symbol=symbol)
@@ -130,6 +130,8 @@ class BinanceStrategy(bt.Strategy):
 
                 self.buyprice = order.executed.price
                 self.buycomm = order.executed.comm
+                # self.set_stop_loss(order)
+
             else:  # Sell
                 self.log('SELL EXECUTED, Symbol: %s, Price: %.5f, Cost: %.5f, Comm %.5f' %
                          (order.info['symbol'], order.executed.price,
@@ -137,13 +139,23 @@ class BinanceStrategy(bt.Strategy):
                           order.executed.comm))
 
         elif order.status in [order.Canceled, order.Margin, order.Rejected]:
-            self.log('Order Canceled/Margin/Rejected')
+            self.log('Order %s' % order.Status[order.status])
+        pass
+
+    def set_stop_loss(self, order):
+        if not self.p.trail:
+            stop_price = order.executed.price * (1.0 - self.p.stop_loss)
+            self.sell(exectype=bt.Order.Stop, price=stop_price)
+        else:
+            self.sell(exectype=bt.Order.StopTrail, trailamount=self.p.trail)
 
     def notify_trade(self, trade):
         if not trade.isclosed:
             return
 
-        self.log('OPERATION PROFIT, GROSS %.2f, NET %.2f' % (trade.pnl, trade.pnlcomm))
+        if trade.pnl < 0:
+            self.log('%s, OPERATION PROFIT, GROSS %.2f, NET %.2f' % (
+            trade.data._dataname.split('-')[1], trade.pnl, trade.pnlcomm))
 
     def log(self, txt, dt=None):
         dt = dt or self.datas[0].datetime.date(0)
@@ -158,12 +170,12 @@ if __name__ == '__main__':
 
     files = [f for f in listdir(data_path) if isfile(join(data_path, f))]
 
-    top_cryptos = get_top_cryptos_by_market_volume(15)
+    top_cryptos = get_top_cryptos_by_market_volume(20)
+    # exclusion = ['XMRUSDT', 'XTZUSDT', 'EOSUSDT', 'LINKUSDT', 'TRXUSDT', 'BCHUSDT', 'ATOMUSDT']
+    # top_cryptos = [e for e in top_cryptos if e not in exclusion]
     for i, file in enumerate(files):
         if file.split('-')[1] in top_cryptos:
-            data = BinanceCsvDataFeed(dataname=join(data_path, file),
-                                      fromdate=datetime(2020, 1, 1),
-                                      todate=datetime(2020, 10, 6))
+            data = BinanceCsvDataFeed(dataname=join(data_path, file), todate=datetime(2019, 12, 31))
             cerebro.adddata(data)
 
     cerebro.broker.setcash(1000.0)

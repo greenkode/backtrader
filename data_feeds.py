@@ -1,4 +1,6 @@
 import datetime
+import backtrader as bt
+
 import backtrader.feeds as btfeed
 
 
@@ -32,10 +34,24 @@ class BinancePandasDataFeed(btfeed.DataBase):
         ('open', -1),
         ('close', -1),
         ('volume', -1),
+        ('npy', -1),
         ('close_time', -1),
         ('quote_av', -1),
         ('trades', -1),
         ('tb_base_av', -1),
         ('tb_quote_av', -1),
         ('ignore', -1)
+    )
+
+
+class PandasData(bt.feeds.PandasData):
+    lines = ('npy',)
+    params = (
+        ('datetime', None),
+        ('open', 'open'),
+        ('high', 'high'),
+        ('low', 'low'),
+        ('close', 'close'),
+        ('volume', 'volume'),
+        ('npy', 'npy'),
     )

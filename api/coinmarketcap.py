@@ -6,14 +6,15 @@ import json
 import pandas as pd
 from datetime import datetime
 
+filename = 'api/market_cap.json'
+
 
 def get_top_cryptos_by_market_volume(number):
-    if get_last_download():
+    if redownload():
         url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest'
         parameters = {
             'start': '1',
-            'convert': 'USD',
-            'limit': number,
+            'convert': 'USD'
         }
         headers = {
             'Accepts': 'application/json',
@@ -25,7 +26,6 @@ def get_top_cryptos_by_market_volume(number):
 
         try:
             response = session.get(url, params=parameters)
-            # print(response.text)
             data = json.loads(response.text)
             save_json_to_file(data)
 
@@ -41,15 +41,17 @@ def has_enough_data(coin):
 
 
 def save_json_to_file(data):
-    with open('api/market_cap.json', 'w') as outfile:
+    with open(filename, 'w') as outfile:
         json.dump(data, outfile)
 
 
 def get_data_from_file():
-    with open('api/market_cap.json', 'r') as json_data:
+    with open(filename, 'r') as json_data:
         return json.load(json_data)
 
 
-def get_last_download():
+def redownload():
+    if not os.path.isfile(filename):
+        return True
     data = get_data_from_file()
     return (datetime.now() - pd.to_datetime(data['status']['timestamp']).to_pydatetime().replace(tzinfo=None)).days > 1

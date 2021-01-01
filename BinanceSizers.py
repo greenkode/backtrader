@@ -1,27 +1,19 @@
 import backtrader as bt
 
 
-class CommInfoFractional(bt.CommInfoBase):
-    params = (
-        ('stocklike', True),
-        ('commission', 0.001),
-        ('commtype', bt.CommInfoBase.COMM_PERC),
-    )
-
-    def _getcommission(self, size, price, pseudoexec):
-        return abs(size * price * self.p.commission)
+class CommInfoFractional(bt.CommissionInfo):
+    def getsize(self, price, cash):
+        """Returns fractional size for cash operation @price"""
+        return self.p.leverage * (cash / price)
 
 
 class BinanceSizer(bt.Sizer):
-    params = (('prop', 0.2),)
+    params = (('maximum_stake', 0.2),)
 
     def _getsizing(self, comminfo, cash, data, isbuy):
 
         if isbuy:
-            if 'BTCUSDT' in data._dataname:
-                print('in bitcoin')
-
-            target = self.broker.getvalue() * self.p.prop  # Ideal total value of the position
+            target = self.broker.getvalue() * self.p.maximum_stake  # Ideal total value of the position
             price = data.close[0]
             size_net = target / price  # How many shares are needed to get target
             size = size_net * 0.99
