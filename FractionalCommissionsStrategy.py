@@ -1,15 +1,13 @@
 import argparse
 import logging
 import sys
-import webbrowser
 from datetime import datetime
 
 import backtrader as bt
-import pandas as pd
-import quantstats as qs
 
 from analyzers import CashMarket
 from commissions import CryptoSpotCommissionInfo
+from strategy_analysis import save_for_pyfolio, export_quantstats
 
 
 class St(bt.Strategy):
@@ -106,28 +104,18 @@ def run(args=None):
 
     cerebro.broker.set_cash(args.cash)  # set broker cash
 
+    cerebro.addanalyzer(bt.analyzers.PyFolio, _name='pyfolio')
     cerebro.addanalyzer(CashMarket, _name="cash_market")
 
     if args.fractional:  # use the fractional scheme if requested
         cerebro.broker.addcommissioninfo(CryptoSpotCommissionInfo())
 
-    results = cerebro.run()
-    qs.extend_pandas()
+    results = cerebro.run()  # execute
+    save_for_pyfolio(results[0])
+    export_quantstats(results[0])
 
-    # ---- Format the values from results ----
-    df_values = pd.DataFrame(results[0].analyzers.getbyname("cash_market").get_analysis()).T
-    df_values = df_values.iloc[:, 1]
-    returns = qs.utils.to_returns(df_values)
-    returns.index = pd.to_datetime(returns.index)
-    # ----------------------------------------
-
-    # ---- Format the benchmark ----
-    benchmark = pd.read_csv('/Users/umoh/Data/Binance/1d/Binance_BTCUSDT_1d.csv',
-                            parse_dates=True, index_col=0)['close']
-    benchmark.index = pd.to_datetime(benchmark.index) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=11)
-    benchmark = qs.utils.to_returns(benchmark)
-
-    qs.reports.html(returns, benchmark=benchmark, output="qs.html")
+    if args.plot:  # Plot if requested to
+        cerebro.plot(**eval('dict(' + args.plot + ')'))
 
 
 def logconfig(pargs):
