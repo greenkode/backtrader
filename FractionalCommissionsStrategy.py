@@ -1,15 +1,14 @@
 import argparse
 import logging
 import sys
+import webbrowser
 from datetime import datetime
 
 import backtrader as bt
 import pandas as pd
-import pyfolio as pf
+import quantstats as qs
 
-# This defines not only the commission info, but some other aspects
-# of a given data asset like the "getsize" information from below
-# params = dict(stocklike=True)  # No margin, no multiplier
+from analyzers import CashMarket
 from commissions import CryptoSpotCommissionInfo
 
 
@@ -107,29 +106,28 @@ def run(args=None):
 
     cerebro.broker.set_cash(args.cash)  # set broker cash
 
-    cerebro.addanalyzer(bt.analyzers.PyFolio, _name='pyfolio')
+    cerebro.addanalyzer(CashMarket, _name="cash_market")
 
     if args.fractional:  # use the fractional scheme if requested
         cerebro.broker.addcommissioninfo(CryptoSpotCommissionInfo())
 
-    results = cerebro.run()  # execute
-    strat = results[0]
+    results = cerebro.run()
+    qs.extend_pandas()
 
-    pyfolio = strat.analyzers.getbyname('pyfolio')
-    returns, positions, transactions, gross_lev = pyfolio.get_pf_items()
+    # ---- Format the values from results ----
+    df_values = pd.DataFrame(results[0].analyzers.getbyname("cash_market").get_analysis()).T
+    df_values = df_values.iloc[:, 1]
+    returns = qs.utils.to_returns(df_values)
+    returns.index = pd.to_datetime(returns.index)
+    # ----------------------------------------
 
-    benchmark = pd.read_csv('/Users/umoh/Data/Binance/1d/Binance_BTCUSDT_1d.csv', parse_dates=True, index_col=0)
-    benchmark = benchmark.tz_localize(tz='utc')
+    # ---- Format the benchmark ----
+    benchmark = pd.read_csv('/Users/umoh/Data/Binance/1d/Binance_BTCUSDT_1d.csv',
+                            parse_dates=True, index_col=0)['close']
+    benchmark.index = pd.to_datetime(benchmark.index) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=11)
+    benchmark = qs.utils.to_returns(benchmark)
 
-    pf.create_full_tear_sheet(returns,
-                              positions=positions,
-                              transactions=transactions,
-                              benchmark_rets=benchmark.loc[datetime(2018, 1, 1):]['close'],
-                              gross_lev=gross_lev,
-                              round_trips=True)
-
-    if args.plot:  # Plot if requested to
-        cerebro.plot(**eval('dict(' + args.plot + ')'))
+    qs.reports.html(returns, benchmark=benchmark, output="qs.html")
 
 
 def logconfig(pargs):
