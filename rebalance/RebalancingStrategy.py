@@ -7,7 +7,10 @@ import glob
 import pandas as pd
 
 from BinanceSizers import CommInfoFractional
+from analyzers import CashMarket, AlphalensAnalyzer
+from commissions import CryptoSpotCommissionInfo
 from data_feeds import BinancePandasDataFeed, BinanceCsvDataFeed, PandasData
+from strategy_analysis import save_for_alphalens
 
 
 class RebalancingStrategy(bt.Strategy):
@@ -36,9 +39,13 @@ class RebalancingStrategy(bt.Strategy):
 
         # simple rank formula: (momentum * net payout) / volatility
         # the highest ranked: low vol, large momentum, large payout
-        self.ranks = {d: d.npy * m / v for d, v, m in zip(self.datas, vs, ms)}
+        self.ranks = {d: 5 * m / v for d, v, m in zip(self.datas, vs, ms)}
+
+        self.started = False
 
     def next(self):
+
+        self.started = True
         # sort data and current rank
         ranks = sorted(
             self.ranks.items(),  # get the (d, rank), pair
@@ -81,9 +88,9 @@ class RebalancingStrategy(bt.Strategy):
         if order.status == order.Completed:
             self.log(
                 '{} Order Completed - Size: {} @Price: {} Value: {:.2f} Comm: {:.2f}'.format(
-                otypetxt, order.executed.size, order.executed.price,
-                order.executed.value, order.executed.comm
-            ))
+                    otypetxt, order.executed.size, order.executed.price,
+                    order.executed.value, order.executed.comm
+                ))
         # else:
         #     self.log('{} Order rejected'.format(otypetxt))
 
@@ -121,9 +128,22 @@ def run(args=None):
                                 parse_dates=True,
                                 index_col=0)
 
-        if len(dataframe) > 600:
-            dataframe['npy'] = 5
-            data = PandasData(dataname=dataframe, name=os.path.basename(fname).split('.')[0])
+        if len(dataframe) > 1000:
+            data = bt.feeds.GenericCSVData(
+                dataname=fname,
+                fromdate=datetime.datetime(2017, 10, 1),
+                todate=datetime.datetime(2020, 12, 31),
+                nullvalue=0.0,
+                dtformat='%Y-%m-%d %H:%M:%S',
+                datetime=0,
+                high=1,
+                low=2,
+                open=3,
+                close=4,
+                volume=5,
+                openinterest=-1,
+                name=fname.split('_')[1]
+            )
 
             if not args.noprint:
                 print('--------------------------------------------------')
@@ -138,9 +158,12 @@ def run(args=None):
     # set the cash
     cerebro.broker.setcash(args.cash)
     if args.fractional:
-        cerebro.broker.addcommissioninfo(CommInfoFractional())
+        cerebro.broker.addcommissioninfo(CryptoSpotCommissionInfo())
 
-    cerebro.run()  # execute it all
+    cerebro.addanalyzer(AlphalensAnalyzer, _name="alphalens")
+
+    results = cerebro.run()  # execute it all
+    save_for_alphalens(results[0])
 
     # Basic performance evaluation ... final value ... minus starting cash
     pnl = cerebro.broker.get_value() - args.cash

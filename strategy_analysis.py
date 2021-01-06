@@ -2,6 +2,10 @@ import pandas as pd
 import quantstats as qs
 import os
 
+export_directory = "/Users/umoh/Data/pyfolio/"
+if not os.path.isdir(export_directory):
+    os.mkdir(export_directory)
+
 
 def save_for_pyfolio(strat):
     pyfolio = strat.analyzers.getbyname('pyfolio')
@@ -10,15 +14,22 @@ def save_for_pyfolio(strat):
     benchmark = pd.read_csv('/Users/umoh/Data/Binance/1d/Binance_BTCUSDT_1d.csv', parse_dates=True, index_col=0)
     benchmark = benchmark.tz_localize(tz='utc')
 
-    export_directory = "/Users/umoh/Data/pyfolio/"
-    if not os.path.isdir(export_directory):
-        os.mkdir(export_directory)
-
     pd.to_pickle(returns, os.path.join(export_directory, "returns.pkl"))
     pd.to_pickle(positions, os.path.join(export_directory, "positions.pkl"))
     pd.to_pickle(transactions, os.path.join(export_directory, "transactions.pkl"))
     pd.to_pickle(gross_lev, os.path.join(export_directory, "gross_lev.pkl"))
     pd.to_pickle(benchmark, os.path.join(export_directory, "benchmark.pkl"))
+
+
+def save_for_alphalens(strat):
+    rankings, price = strat.analyzers.getbyname("alphalens").get_analysis()
+    df = pd.DataFrame(rankings)
+    df = df.set_index(['date', 'asset'])
+
+    price_df = pd.DataFrame(price).T
+
+    pd.to_pickle(df.squeeze(), os.path.join(export_directory, "alphalens.pkl"))
+    pd.to_pickle(price_df.squeeze(), os.path.join(export_directory, "prices.pkl"))
 
 
 def export_quantstats(strat):

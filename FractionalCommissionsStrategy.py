@@ -29,6 +29,7 @@ class St(bt.Strategy):
         elif self.cross < 0:
             self.loginfo('Enter Short')
             self.order_target_percent(target=-self.p.target)
+        print(f"Strategy - {self.data.datetime.date()}")
 
     def notify_trade(self, trade):
         if trade.justopened:
