@@ -9,10 +9,11 @@ import sys
 import backtrader as bt
 from datetime import datetime
 
-from data_feeds import BinanceCsvDataFeed
-from BinanceSizers import BinanceSizer, CommInfoFractional
+from scipy import stats
 
-from Portfolio import rebalance
+from domain.data import BinanceCsvDataFeed
+from domain.sizer import BinanceSizer, CommInfoFractional
+
 import numpy as np
 
 from api.coinmarketcap import get_top_cryptos_by_market_volume
@@ -155,11 +156,30 @@ class BinanceStrategy(bt.Strategy):
 
         if trade.pnl < 0:
             self.log('%s, OPERATION PROFIT, GROSS %.2f, NET %.2f' % (
-            trade.data._dataname.split('-')[1], trade.pnl, trade.pnlcomm))
+                trade.data._dataname.split('-')[1], trade.pnl, trade.pnlcomm))
 
     def log(self, txt, dt=None):
         dt = dt or self.datas[0].datetime.date(0)
         print('%s, %s' % (dt.isoformat(), txt))
+
+
+def rebalance(context, hist):
+    # output_progress(context)
+    return hist.apply(momentum_score).sort_values(ascending=False)
+
+
+def momentum_score(data):
+    x = np.arange(len(data))
+    log_ts = np.log(data)
+    slope, intercept, r_value, p_value, std_err = stats.linregress(x, log_ts)
+    annualized_slope = (np.power(np.exp(slope), 365) - 1) * 100
+    return annualized_slope * (r_value ** 2)
+
+
+def output_progress(context):
+    perf_pct = (context.portfolio.portfolio_value / context.last_month) - 1
+    print("{} - Last Month Result: {:.2%}".format(context.todays_date, perf_pct))
+    context.last_month = context.portfolio.portfolio_value
 
 
 if __name__ == '__main__':

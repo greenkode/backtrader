@@ -6,11 +6,9 @@ import datetime
 import glob
 import pandas as pd
 
-from BinanceSizers import CommInfoFractional
-from analyzers import CashMarket, AlphalensAnalyzer
-from commissions import CryptoSpotCommissionInfo
-from data_feeds import BinancePandasDataFeed, BinanceCsvDataFeed, PandasData
-from strategy_analysis import save_for_alphalens
+from domain.analysis import AlphalensAnalyzer
+from domain.commission import CryptoSpotCommissionInfo
+from exports.exports import save_for_alphalens
 
 
 class RebalancingStrategy(bt.Strategy):
