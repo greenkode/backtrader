@@ -1,6 +1,3 @@
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
-
 import pandas as pd
 from os import listdir
 from os.path import isfile, join, dirname, basename
