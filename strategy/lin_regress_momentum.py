@@ -1,19 +1,19 @@
-import pandas as pd
+import sys
+from datetime import datetime
 from os import listdir
 from os.path import isfile, join, dirname, basename
-import sys
 
 import backtrader as bt
-from datetime import datetime
-
+import numpy as np
+import pandas as pd
 from scipy import stats
 
-from domain.data import BinanceCsvDataFeed
-from domain.sizer import BinanceSizer, CommInfoFractional
-
-import numpy as np
-
 from api.coinmarketcap import get_top_cryptos_by_market_volume
+from domain.analysis import QuantStatsAnalyzer, AlphalensAnalyzer
+from domain.commission import CryptoSpotCommissionInfo
+from domain.data import BinanceCsvDataFeed
+from domain.sizer import BinanceSizer
+from exports.exports import save_for_alphalens, save_for_pyfolio, export_quantstats
 
 
 class BinanceStrategy(bt.Strategy):
@@ -33,8 +33,11 @@ class BinanceStrategy(bt.Strategy):
 
         self.open_orders = {}
         self.window = 0
+        self.started = False
 
     def next(self):
+
+        self.started = True
 
         self.window = self.window + 1
 
@@ -73,7 +76,7 @@ class BinanceStrategy(bt.Strategy):
         df = pd.DataFrame()
         for datum in self.datas:
             hist = datum.close.lines[0].get(size=self.p.volatility_window + 1)
-            df[basename(datum._dataname).split('-')[1]] = hist
+            df[datum._name] = hist
         ranking_table = rebalance(self, df)
         return df, ranking_table
 
@@ -153,7 +156,7 @@ class BinanceStrategy(bt.Strategy):
 
         if trade.pnl < 0:
             self.log('%s, OPERATION PROFIT, GROSS %.2f, NET %.2f' % (
-                trade.data._dataname.split('-')[1], trade.pnl, trade.pnlcomm))
+                trade.data._name, trade.pnl, trade.pnlcomm))
 
     def log(self, txt, dt=None):
         dt = dt or self.datas[0].datetime.date(0)
@@ -191,15 +194,35 @@ if __name__ == '__main__':
     # exclusion = ['XMRUSDT', 'XTZUSDT', 'EOSUSDT', 'LINKUSDT', 'TRXUSDT', 'BCHUSDT', 'ATOMUSDT']
     # top_cryptos = [e for e in top_cryptos if e not in exclusion]
     for i, file in enumerate(files):
-        if file.split('-')[1] in top_cryptos:
-            data = BinanceCsvDataFeed(dataname=join(data_path, file), todate=datetime(2019, 12, 31))
+        if file.split('_')[1] in top_cryptos:
+            data = bt.feeds.GenericCSVData(
+                dataname=join(data_path, file),
+                fromdate=datetime(2017, 10, 1),
+                todate=datetime(2020, 12, 31),
+                nullvalue=0.0,
+                dtformat='%Y-%m-%d %H:%M:%S',
+                datetime=0,
+                high=1,
+                low=2,
+                open=3,
+                close=4,
+                volume=5,
+                openinterest=-1,
+                name=file.split('_')[1]
+            )
             cerebro.adddata(data)
 
-    cerebro.broker.setcash(1000.0)
-    cerebro.addsizer(BinanceSizer)
-    cerebro.broker.addcommissioninfo(CommInfoFractional())
+    cerebro.broker.setcash(10000.0)
+    cerebro.broker.addcommissioninfo(CryptoSpotCommissionInfo())
+
+    cerebro.addanalyzer(QuantStatsAnalyzer, _name="quantstats")
+    cerebro.addanalyzer(bt.analyzers.PyFolio, _name='pyfolio')
+    cerebro.addanalyzer(AlphalensAnalyzer, _name="alphalens")
+
     print('Starting Portfolio Value: %.2f' % cerebro.broker.getvalue())
-    cerebro.run()
+    results = cerebro.run()
     print('Final Portfolio Value: %.2f' % cerebro.broker.getvalue())
 
-    cerebro.plot(volume=False)
+    save_for_alphalens(results[0])
+    save_for_pyfolio(results[0])
+    export_quantstats(results[0])

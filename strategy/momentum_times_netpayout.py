@@ -2,13 +2,13 @@ import argparse
 import os
 
 import backtrader as bt
-import datetime
+from datetime import datetime
 import glob
 import pandas as pd
 
-from domain.analysis import AlphalensAnalyzer
+from domain.analysis import AlphalensAnalyzer, QuantStatsAnalyzer
 from domain.commission import CryptoSpotCommissionInfo
-from exports.exports import save_for_alphalens
+from exports.exports import save_for_alphalens, save_for_pyfolio, export_quantstats
 
 
 class RebalancingStrategy(bt.Strategy):
@@ -129,8 +129,8 @@ def run(args=None):
         if len(dataframe) > 1000:
             data = bt.feeds.GenericCSVData(
                 dataname=fname,
-                fromdate=datetime.datetime(2017, 10, 1),
-                todate=datetime.datetime(2020, 12, 31),
+                fromdate=datetime(2017, 10, 1),
+                todate=datetime(2020, 12, 31),
                 nullvalue=0.0,
                 dtformat='%Y-%m-%d %H:%M:%S',
                 datetime=0,
@@ -158,14 +158,22 @@ def run(args=None):
     if args.fractional:
         cerebro.broker.addcommissioninfo(CryptoSpotCommissionInfo())
 
+    cerebro.addanalyzer(QuantStatsAnalyzer, _name="quantstats")
+    cerebro.addanalyzer(bt.analyzers.PyFolio, _name='pyfolio')
     cerebro.addanalyzer(AlphalensAnalyzer, _name="alphalens")
 
     results = cerebro.run()  # execute it all
+
     save_for_alphalens(results[0])
+    save_for_pyfolio(results[0])
+    export_quantstats(results[0])
 
     # Basic performance evaluation ... final value ... minus starting cash
     pnl = cerebro.broker.get_value() - args.cash
     print('Profit ... or Loss: {:.2f}'.format(pnl))
+
+    if args.plot:  # Plot if requested to
+        cerebro.plot(**eval('dict(' + args.plot + ')'))
 
 
 def parse_args(pargs=None):

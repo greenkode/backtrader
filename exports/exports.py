@@ -36,7 +36,7 @@ def export_quantstats(strat):
     qs.extend_pandas()
 
     # ---- Format the values from results ----
-    df_values = pd.DataFrame(strat.analyzers.getbyname("cash_market").get_analysis()).T
+    df_values = pd.DataFrame(strat.analyzers.getbyname("quantstats").get_analysis()).T
     df_values = df_values.iloc[:, 1]
     returns = qs.utils.to_returns(df_values)
     returns.index = pd.to_datetime(returns.index)

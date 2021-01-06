@@ -29,9 +29,9 @@ class AlphalensAnalyzer(bt.analyzers.Analyzer):
         return self.ranks, self.prices
 
 
-class CashMarket(bt.analyzers.Analyzer):
+class QuantStatsAnalyzer(bt.analyzers.Analyzer):
     def start(self):
-        super(CashMarket, self).start()
+        super(QuantStatsAnalyzer, self).start()
 
     def create_analysis(self):
         self.rets = {}
