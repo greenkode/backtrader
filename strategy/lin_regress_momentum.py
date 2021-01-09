@@ -17,12 +17,13 @@ from exports.exports import save_for_alphalens, save_for_pyfolio, export_quantst
 
 
 class BinanceStrategy(bt.Strategy):
-    params = (('stop_loss', 0.02),
-              ('maximum_stake', 0.2),
-              ('trail', False),
-              ('volatility_window', 20),
-              ('minimum_momentum', 40),
-              ('portfolio_size', 10),)
+    params = dict(stop_loss=0.02,
+                  maximum_stake=0.2,
+                  trail=False,
+                  volatility_window=20,
+                  minimum_momentum=40,
+                  portfolio_size=10,
+                  reserve= 0.05)
 
     def __init__(self):
         self.dataclose = self.datas[0].close
@@ -34,6 +35,9 @@ class BinanceStrategy(bt.Strategy):
         self.open_orders = {}
         self.window = 0
         self.started = False
+
+        self.perctarget = (1.0 - self.p.reserve) % self.p.portfolio_size
+
 
     def next(self):
 

@@ -3,14 +3,16 @@ import numpy as np
 from scipy.stats import linregress
 
 
-def momentum_func(self, the_array):
-    r = np.log(the_array)
+@staticmethod
+def momentum_func(data):
+    r = np.log(data)
     slope, _, rvalue, _, _ = linregress(np.arange(len(r)), r)
-    annualized = (1 + slope) ** 365
+    # annualized = (1 + slope) ** 252
+    annualized = (np.power(np.exp(slope), 365) - 1) * 100
     return annualized * (rvalue ** 2)
 
 
-class Momentum(bt.ind.PeriodN):
+class Momentum(bt.ind.OperationN):
     lines = ('trend',)
-    params = dict(period=50)
+    params = dict(period=20)
     func = momentum_func
