@@ -11,7 +11,7 @@ from scipy import stats
 from api.coinmarketcap import get_top_cryptos_by_market_volume
 from domain.analysis import QuantStatsAnalyzer, AlphalensAnalyzer
 from domain.commission import CryptoSpotCommissionInfo
-from domain.data import BinanceCsvDataFeed
+from domain.data import BinanceCsvDataFeed, load_data_into_cerebro
 from domain.sizer import BinanceSizer
 from exports.exports import save_for_alphalens, save_for_pyfolio, export_quantstats
 
@@ -22,8 +22,8 @@ class BinanceStrategy(bt.Strategy):
                   trail=False,
                   volatility_window=20,
                   minimum_momentum=40,
-                  portfolio_size=10,
-                  reserve= 0.05)
+                  portfolio_size=2,
+                  reserve=0.05)
 
     def __init__(self):
         self.dataclose = self.datas[0].close
@@ -37,7 +37,6 @@ class BinanceStrategy(bt.Strategy):
         self.started = False
 
         self.perctarget = (1.0 - self.p.reserve) % self.p.portfolio_size
-
 
     def next(self):
 
@@ -190,43 +189,11 @@ if __name__ == '__main__':
     cerebro = bt.Cerebro()
     cerebro.addstrategy(BinanceStrategy)
 
-    data_path = dirname(join(sys.argv[1], sys.argv[2]))
-
-    files = [f for f in listdir(data_path) if isfile(join(data_path, f))]
-
-    top_cryptos = get_top_cryptos_by_market_volume(20)
-    # exclusion = ['XMRUSDT', 'XTZUSDT', 'EOSUSDT', 'LINKUSDT', 'TRXUSDT', 'BCHUSDT', 'ATOMUSDT']
-    # top_cryptos = [e for e in top_cryptos if e not in exclusion]
-    for i, file in enumerate(files):
-        if file.split('_')[1] in top_cryptos:
-            data = bt.feeds.GenericCSVData(
-                dataname=join(data_path, file),
-                fromdate=datetime(2017, 10, 1),
-                todate=datetime(2020, 12, 31),
-                nullvalue=0.0,
-                dtformat='%Y-%m-%d %H:%M:%S',
-                datetime=0,
-                high=1,
-                low=2,
-                open=3,
-                close=4,
-                volume=5,
-                openinterest=-1,
-                name=file.split('_')[1]
-            )
-            cerebro.adddata(data)
+    load_data_into_cerebro(cerebro, filter_list=['ETHUSDT', 'BTCUSDT'])
 
     cerebro.broker.setcash(10000.0)
     cerebro.broker.addcommissioninfo(CryptoSpotCommissionInfo())
 
-    cerebro.addanalyzer(QuantStatsAnalyzer, _name="quantstats")
-    cerebro.addanalyzer(bt.analyzers.PyFolio, _name='pyfolio')
-    cerebro.addanalyzer(AlphalensAnalyzer, _name="alphalens")
-
     print('Starting Portfolio Value: %.2f' % cerebro.broker.getvalue())
     results = cerebro.run()
     print('Final Portfolio Value: %.2f' % cerebro.broker.getvalue())
-
-    save_for_alphalens(results[0])
-    save_for_pyfolio(results[0])
-    export_quantstats(results[0])

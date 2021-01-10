@@ -1,4 +1,6 @@
-import datetime
+import os
+import glob
+from datetime import datetime
 import backtrader as bt
 
 import backtrader.feeds as btfeed
@@ -6,8 +8,8 @@ import backtrader.feeds as btfeed
 
 class BinanceCsvDataFeed(btfeed.GenericCSVData):
     params = (
-        ('fromdate', datetime.datetime(2017, 7, 1)),
-        ('todate', datetime.datetime.now()),
+        ('fromdate', datetime(2017, 7, 1)),
+        ('todate', datetime.now()),
         ('nullvalue', float('NaN')),
         ('dtformat', '%Y-%m-%d'),
         ('tmformat', '%H:%M:%S'),
@@ -55,3 +57,27 @@ class PandasData(bt.feeds.PandasData):
         ('volume', 'volume'),
         ('npy', 'npy'),
     )
+
+
+def load_data_into_cerebro(cerebro, period='1d', filter_list=[], exclusion_list=[]):
+    for fname in glob.glob(os.path.join(f"/Users/umoh/Data/Binance/{period}", '*')):
+        name = os.path.basename(fname).split('_')[1]
+        if name in exclusion_list:
+            pass
+        if len(filter_list) == 0 or name in filter_list:
+            data = bt.feeds.GenericCSVData(
+                dataname=fname,
+                fromdate=datetime(2017, 10, 1),
+                todate=datetime(2020, 12, 31),
+                nullvalue=0.0,
+                dtformat='%Y-%m-%d %H:%M:%S',
+                datetime=0,
+                high=1,
+                low=2,
+                open=3,
+                close=4,
+                volume=5,
+                openinterest=-1,
+                name=name
+            )
+            cerebro.adddata(data)
