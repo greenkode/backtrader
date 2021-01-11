@@ -48,4 +48,4 @@ def export_quantstats(strat):
     benchmark.index = pd.to_datetime(benchmark.index) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=11)
     benchmark = qs.utils.to_returns(benchmark)
 
-    qs.reports.html(returns, benchmark=benchmark, output="qs.html")
+    qs.reports.html(returns, benchmark=benchmark, output="../html/qs.html")

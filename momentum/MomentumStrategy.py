@@ -3,10 +3,12 @@ import collections
 import backtrader as bt
 import numpy as np
 
+from domain.analysis import QuantStatsAnalyzer
 from domain.commission import CryptoSpotCommissionInfo
 from domain.data import load_data_into_cerebro
 from domain.indicator import Momentum
 from api.coinmarketcap import get_top_cryptos_by_market_volume
+from exports.exports import save_for_pyfolio, export_quantstats
 
 
 class MomentumStrategy(bt.Strategy):
@@ -120,15 +122,21 @@ class MomentumStrategy(bt.Strategy):
 def run():
     cerebro = bt.Cerebro()
 
-    load_data_into_cerebro(cerebro, period='1d', filter_list=get_top_cryptos_by_market_volume(2), exclusion_list=[])
+    load_data_into_cerebro(cerebro, period='1d', filter_list=get_top_cryptos_by_market_volume(10), exclusion_list=[])
 
     cerebro.addstrategy(MomentumStrategy)
     cerebro.broker.setcash(10000.0)
-    cerebro.broker.addcommissioninfo(CryptoSpotCommissionInfo(commission=0.1))
+    cerebro.broker.addcommissioninfo(CryptoSpotCommissionInfo())
+
+    cerebro.addanalyzer(QuantStatsAnalyzer, _name="quantstats")
+    cerebro.addanalyzer(bt.analyzers.PyFolio, _name='pyfolio')
 
     print('Starting Portfolio Value: %.2f' % cerebro.broker.getvalue())
-    cerebro.run()
+    results = cerebro.run()
     print('Final Portfolio Value: %.2f' % cerebro.broker.getvalue())
+
+    save_for_pyfolio(results[0])
+    export_quantstats(results[0])
 
 
 if __name__ == '__main__':
