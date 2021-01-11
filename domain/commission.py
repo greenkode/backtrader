@@ -15,12 +15,15 @@ class CryptoSpotCommissionInfo(bt.CommissionInfo):
         assert self.p.stocklike
         assert self.p.percabs
         assert self.p.leverage == 1.0
-        assert self.p.automargin == False
+        assert not self.p.automargin
 
         super().__init__()
 
     def getsize(self, price, cash):
         return self.p.leverage * (cash / price)
+
+    def getcommission(self, size, price):
+        return abs(size) * price * 0.001
 
 
 class CryptoContractCommissionInfo(bt.CommissionInfo):

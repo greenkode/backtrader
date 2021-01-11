@@ -6,6 +6,7 @@ import numpy as np
 from domain.commission import CryptoSpotCommissionInfo
 from domain.data import load_data_into_cerebro
 from domain.indicator import Momentum
+from api.coinmarketcap import get_top_cryptos_by_market_volume
 
 
 class MomentumStrategy(bt.Strategy):
@@ -47,11 +48,11 @@ class MomentumStrategy(bt.Strategy):
         otypetxt = 'Buy' if order.isbuy() else 'Sell'
         if order.status == order.Completed:
             self.log(
-                '{} Order Completed - Size: {} @Price: {} Value: {:.2f} Comm: {:.2f}'.format(
-                    otypetxt, order.executed.size, order.executed.price,
+                '{} Order Completed - Symbol: {} Size: {} @Price: {} Value: {:.2f} Comm: {:.2f}'.format(
+                    otypetxt, order.info['symbol'], order.executed.size, order.executed.price,
                     order.executed.value, order.executed.comm
                 ))
-            # else:
+        else:
             self.log('{} Order rejected'.format(otypetxt))
 
     def log(self, arg):
@@ -119,11 +120,11 @@ class MomentumStrategy(bt.Strategy):
 def run():
     cerebro = bt.Cerebro()
 
-    load_data_into_cerebro(cerebro, period='1d', filter_list=['ETHUSDT', 'BTCUSDT'], exclusion_list=[])
+    load_data_into_cerebro(cerebro, period='1d', filter_list=get_top_cryptos_by_market_volume(2), exclusion_list=[])
 
     cerebro.addstrategy(MomentumStrategy)
     cerebro.broker.setcash(10000.0)
-    cerebro.broker.addcommissioninfo(CryptoSpotCommissionInfo())
+    cerebro.broker.addcommissioninfo(CryptoSpotCommissionInfo(commission=0.1))
 
     print('Starting Portfolio Value: %.2f' % cerebro.broker.getvalue())
     cerebro.run()

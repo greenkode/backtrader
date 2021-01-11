@@ -67,8 +67,8 @@ def load_data_into_cerebro(cerebro, period='1d', filter_list=[], exclusion_list=
         if len(filter_list) == 0 or name in filter_list:
             data = bt.feeds.GenericCSVData(
                 dataname=fname,
-                fromdate=datetime(2017, 10, 1),
-                todate=datetime(2020, 12, 31),
+                fromdate=datetime(2020, 1, 1),
+                todate=datetime(2020, 12, 30),
                 nullvalue=0.0,
                 dtformat='%Y-%m-%d %H:%M:%S',
                 datetime=0,

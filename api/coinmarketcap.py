@@ -6,7 +6,7 @@ import json
 import pandas as pd
 from datetime import datetime
 
-filename = 'api/market_cap.json'
+filename = 'market_cap.json'
 
 
 def get_top_cryptos_by_market_volume(number):
