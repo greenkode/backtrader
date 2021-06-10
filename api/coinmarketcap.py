@@ -18,7 +18,7 @@ def get_top_cryptos_by_market_volume(number):
         }
         headers = {
             'Accepts': 'application/json',
-            'X-CMC_PRO_API_KEY': '0c22b4e3-7a0a-4359-9197-b5c334a91149',
+            'X-CMC_PRO_API_KEY': '',
         }
 
         session = Session()

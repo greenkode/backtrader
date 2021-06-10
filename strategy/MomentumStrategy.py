@@ -1,13 +1,16 @@
 import collections
+from datetime import datetime
 
 import backtrader as bt
 import numpy as np
+
+import pyarrow.parquet as pq
+import pyarrow as pa
 
 from domain.analysis import QuantStatsAnalyzer
 from domain.commission import CryptoSpotCommissionInfo
 from domain.data import load_data_into_cerebro
 from domain.indicator import Momentum
-from api.coinmarketcap import get_top_cryptos_by_market_volume
 from exports.exports import save_for_pyfolio, export_quantstats
 
 
@@ -26,7 +29,7 @@ class MomentumStrategy(bt.Strategy):
         self.inds = collections.defaultdict(dict)
 
         for d in self.datas:
-            self.inds[d]['momentum'] = self.p.momentum(d, period=self.p.momentum_period)
+            self.inds[d]['strategy'] = self.p.momentum(d, period=self.p.momentum_period)
             self.inds[d]['volatility'] = self.p.volatr(d, period=self.p.vol_period)
             pct_change = bt.ind.PctChange(d, period=self.p.vol_period)
             self.inds[d]['stddev'] = bt.ind.StdDev(pct_change, period=self.p.vol_period)
@@ -63,7 +66,7 @@ class MomentumStrategy(bt.Strategy):
     def rebalance_portfolio(self):
         # only look at data that we can have indicators for
         self.rankings = list(filter(lambda data: len(data) > self.p.vol_period, self.datas))
-        self.rankings.sort(key=lambda data: self.inds[data]["momentum"][0], reverse=True)
+        self.rankings.sort(key=lambda data: self.inds[data]["strategy"][0], reverse=True)
         num_stocks = len(self.rankings)
 
         # sell stocks based on criteria
@@ -117,27 +120,3 @@ class MomentumStrategy(bt.Strategy):
             targets[k] = percentage
 
         return targets
-
-
-def run():
-    cerebro = bt.Cerebro()
-
-    load_data_into_cerebro(cerebro, period='1d', filter_list=get_top_cryptos_by_market_volume(10), exclusion_list=[])
-
-    cerebro.addstrategy(MomentumStrategy)
-    cerebro.broker.setcash(10000.0)
-    cerebro.broker.addcommissioninfo(CryptoSpotCommissionInfo())
-
-    cerebro.addanalyzer(QuantStatsAnalyzer, _name="quantstats")
-    cerebro.addanalyzer(bt.analyzers.PyFolio, _name='pyfolio')
-
-    print('Starting Portfolio Value: %.2f' % cerebro.broker.getvalue())
-    results = cerebro.run()
-    print('Final Portfolio Value: %.2f' % cerebro.broker.getvalue())
-
-    save_for_pyfolio(results[0])
-    export_quantstats(results[0])
-
-
-if __name__ == '__main__':
-    run()
